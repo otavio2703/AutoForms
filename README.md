@@ -29,8 +29,8 @@ A principal característica desta automação é o uso de reconhecimento de imag
 
 1.  **Clone o repositório** (ou baixe o arquivo `.py`):
     ```bash
-    git clone [https://github.com/otavio2703/AutoForms](https://github.com/seu-usuario/seu-repositorio.git)
-    cd seu-repositorio
+    git clone https://github.com/otavio2703/AutoForms
+    cd autoforms
     ```
 
 2.  **Crie um ambiente virtual** (altamente recomendado):
@@ -75,7 +75,7 @@ Você precisará das 5 imagens a seguir:
 
 1.  Execute o script:
     ```bash
-    python seu_script_v3.6.py
+    python script v3.5 copy.py
     ```
 2.  **Passo 1: Configuração do Excel**
     * Clique em "Procurar..." e selecione seu arquivo Excel.
