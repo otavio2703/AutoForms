@@ -29,7 +29,7 @@ A principal característica desta automação é o uso de reconhecimento de imag
 
 1.  **Clone o repositório** (ou baixe o arquivo `.py`):
     ```bash
-    git clone [https://github.com/seu-usuario/seu-repositorio.git](https://github.com/seu-usuario/seu-repositorio.git)
+    git clone [https://github.com/otavio2703/AutoForms](https://github.com/seu-usuario/seu-repositorio.git)
     cd seu-repositorio
     ```
 
