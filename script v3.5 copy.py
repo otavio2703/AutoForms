@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Automatizador de Tarefas com Controle de Mouse e Teclado v3.11 (Versão Final Estável)
-
-Este script usa OpenCV para reconhecimento de imagem, PyDirectInput para controle do mouse/teclado
-e Pillow para capturas de tela.
-
-MODIFICAÇÃO v3.11 (Correção de Bug Crítico):
-1. Corrigido um erro de sintaxe na função `update_row_count` e outras funções auxiliares
-   que foi introduzido na versão anterior por compactação indevida do código.
-2. O código foi reformatado para garantir legibilidade e estabilidade.
+MODIFICAÇÕES v3.13:
+1. Adicionado registro de "Sucesso" ou "Erro" em uma nova coluna no Excel.
+2. O Excel processado é salvo como um novo arquivo ao final (ex: arquivo_PROCESSADO.xlsx).
+3. Geração de arquivo .txt contendo apenas os contratos que deram erro.
 """
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
@@ -16,17 +11,17 @@ import pandas as pd
 import time
 import threading
 import os
-# Bibliotecas para automação real
 import pydirectinput
 import cv2
 import numpy as np
 from PIL import ImageGrab
+from datetime import datetime
 
 class DesktopAutomationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Automatizador Desktop v3.11 (Estável)")
-        self.root.geometry("700x720")
+        self.root.title("Automatizador Desktop v3.13 (Relatórios Excel e TXT)")
+        self.root.geometry("700x760")
         pydirectinput.PAUSE = 0.1
 
         # Variáveis para os caminhos dos arquivos
@@ -35,6 +30,7 @@ class DesktopAutomationApp:
         self.imagem_botao_pesquisar = tk.StringVar()
         self.imagem_botao_liquidacao_nativo = tk.StringVar()
         self.imagem_botao_liquidacao_hover = tk.StringVar()
+        self.imagem_botao_liquidacao_pequeno = tk.StringVar()
         self.imagem_botao_final = tk.StringVar()
         self.automation_thread = None
         self.stop_event = threading.Event()
@@ -88,10 +84,14 @@ class DesktopAutomationApp:
         tk.Label(image_config_frame, text="Botão Crédito Recebido (Hover):").grid(row=4, column=0, sticky="w", pady=2)
         tk.Entry(image_config_frame, textvariable=self.imagem_botao_liquidacao_hover, state='readonly').grid(row=4, column=1, sticky="ew")
         tk.Button(image_config_frame, text="Procurar...", command=lambda: self.browse_image_file(self.imagem_botao_liquidacao_hover, "Crédito Recebido (Hover)")).grid(row=4, column=2, padx=5)
+
+        tk.Label(image_config_frame, text="Botão Crédito Recebido (Pequeno):").grid(row=5, column=0, sticky="w", pady=2)
+        tk.Entry(image_config_frame, textvariable=self.imagem_botao_liquidacao_pequeno, state='readonly').grid(row=5, column=1, sticky="ew")
+        tk.Button(image_config_frame, text="Procurar...", command=lambda: self.browse_image_file(self.imagem_botao_liquidacao_pequeno, "Crédito Recebido (Pequeno)")).grid(row=5, column=2, padx=5)
         
-        tk.Label(image_config_frame, text="Imagem do Botão Final (Confirmar):").grid(row=5, column=0, sticky="w", pady=2)
-        tk.Entry(image_config_frame, textvariable=self.imagem_botao_final, state='readonly').grid(row=5, column=1, sticky="ew")
-        tk.Button(image_config_frame, text="Procurar...", command=lambda: self.browse_image_file(self.imagem_botao_final, "Botão Final")).grid(row=5, column=2, padx=5)
+        tk.Label(image_config_frame, text="Imagem do Botão Final (Confirmar):").grid(row=6, column=0, sticky="w", pady=2)
+        tk.Entry(image_config_frame, textvariable=self.imagem_botao_final, state='readonly').grid(row=6, column=1, sticky="ew")
+        tk.Button(image_config_frame, text="Procurar...", command=lambda: self.browse_image_file(self.imagem_botao_final, "Botão Final")).grid(row=6, column=2, padx=5)
         image_config_frame.columnconfigure(1, weight=1)
 
         control_frame = tk.LabelFrame(main_frame, text="3. Controle", padx=10, pady=10)
@@ -144,6 +144,7 @@ class DesktopAutomationApp:
                 self.imagem_botao_pesquisar.get() and
                 self.imagem_botao_liquidacao_nativo.get() and
                 self.imagem_botao_liquidacao_hover.get() and
+                self.imagem_botao_liquidacao_pequeno.get() and
                 self.imagem_botao_final.get()):
             self.btn_start.config(state=tk.NORMAL, bg="#4CAF50")
         else:
@@ -196,31 +197,88 @@ class DesktopAutomationApp:
         try:
             caminho_excel = self.excel_path.get()
             coluna_contrato = self.coluna_contrato_entry.get()
+            
             for i in range(5, 0, -1):
                 self.log(f"A automação real começará em {i} segundos...")
                 time.sleep(1)
             
-            df = pd.read_excel(caminho_excel).dropna(subset=[coluna_contrato])
+            # Carregar DataFrame e garantir que é uma cópia limpa
+            df = pd.read_excel(caminho_excel)
+            
+            # Adicionar coluna de Status se não existir
+            if 'Status' not in df.columns:
+                df['Status'] = ""
+
+            lista_erros = [] # Lista para guardar os erros para o TXT
             processed_count = 0
-            for index, row in df.iterrows():
+            
+            # Filtrar apenas as linhas onde o contrato não é nulo
+            # Importante: iterrows retorna o índice original, o que é bom para atualizar o DF original
+            indices_validos = df[df[coluna_contrato].notna()].index
+
+            for index in indices_validos:
                 if self.stop_event.is_set():
                     self.log("Processo interrompido pelo usuário.")
                     break
+                
+                row = df.loc[index]
                 contrato = row[coluna_contrato]
                 contrato_str = str(int(contrato)) if isinstance(contrato, (int, float)) else str(contrato).strip()
+                
                 processed_count += 1
                 if contrato_str:
-                    self.update_progress_label(f"Processando {processed_count} de {self.total_rows}...")
+                    self.update_progress_label(f"Processando {processed_count} de {len(indices_validos)}...")
+                    
+                    # Tenta processar
                     success = self.processar_contrato(contrato_str)
+                    
                     if success:
-                        self.log(f"SUCESSO: Contrato {contrato_str} (Linha {index + 2}) processado.")
+                        self.log(f"SUCESSO: Contrato {contrato_str} processado.")
+                        df.at[index, 'Status'] = "Luquidado"
                     else:
-                        self.log(f"FALHA: Contrato {contrato_str} (Linha {index + 2}) não processado.\n")
+                        self.log(f"FALHA: Contrato {contrato_str} não processado.\n")
+                        df.at[index, 'Status'] = "Erro"
+                        lista_erros.append(contrato_str)
             
+            # --- Fim do Loop ou Interrupção ---
+            
+            # 1. Salvar Excel atualizado (Gera um novo arquivo para evitar erro de permissão se o original estiver aberto)
+            base_name = os.path.splitext(caminho_excel)[0]
+            novo_nome_excel = f"{base_name}_PROCESSADO.xlsx"
+            
+            try:
+                self.log(f"Salvando resultados em: {novo_nome_excel}...")
+                df.to_excel(novo_nome_excel, index=False)
+                self.log("Arquivo Excel salvo com sucesso.")
+            except Exception as e:
+                self.log(f"ERRO CRÍTICO ao salvar Excel: {e}")
+
+            # 2. Gerar TXT de erros
+            if lista_erros:
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    nome_txt = f"erros_log_{timestamp}.txt"
+                    dir_path = os.path.dirname(caminho_excel)
+                    full_path_txt = os.path.join(dir_path, nome_txt)
+                    
+                    with open(full_path_txt, 'w') as f:
+                        f.write("RELATORIO DE ERROS\n")
+                        f.write(f"Data: {datetime.now()}\n")
+                        f.write("-------------------------\n")
+                        for item in lista_erros:
+                            f.write(f"{item}\n")
+                    
+                    self.log(f"Arquivo de erros gerado: {nome_txt}")
+                except Exception as e:
+                    self.log(f"ERRO ao salvar TXT de erros: {e}")
+            else:
+                self.log("Nenhum erro registrado. Arquivo TXT não foi gerado.")
+
             final_message = "PROCESSO FINALIZADO." if not self.stop_event.is_set() else "PROCESSO PARADO."
             self.root.after(0, self.on_automation_finish, final_message)
+
         except Exception as e:
-            error_message = f"ERRO CRÍTICO: {e}"
+            error_message = f"ERRO CRÍTICO NA THREAD: {e}"
             self.root.after(0, self.on_automation_finish, error_message)
 
     def paste_text(self, text):
@@ -266,39 +324,62 @@ class DesktopAutomationApp:
         self.log(f"   - ERRO: Não foi possível encontrar a âncora '{description}' na tela após {timeout} segundos.")
         return False
 
-    def encontrar_e_clicar_duas_imagens(self, image_path_nativo, image_path_hover, description, timeout=10, confidence=0.8):
-        self.log(f" - Procurando '{description}' (estados nativo e hover)...")
+    def encontrar_e_clicar_tres_imagens(self, image_path_nativo, image_path_hover, image_path_pequeno, description, timeout=10, confidence=0.8):
+        self.log(f" - Procurando '{description}' (Nativo, Hover ou Pequeno)...")
         start_time = time.time()
+        
+        # Carrega os templates
         template_nativo = cv2.imread(image_path_nativo, cv2.IMREAD_GRAYSCALE)
         template_hover = cv2.imread(image_path_hover, cv2.IMREAD_GRAYSCALE)
-        if template_nativo is None or template_hover is None:
-            raise FileNotFoundError(f"Uma ou ambas as imagens para '{description}' não foram encontradas.")
+        template_pequeno = cv2.imread(image_path_pequeno, cv2.IMREAD_GRAYSCALE)
+        
+        if template_nativo is None or template_hover is None or template_pequeno is None:
+            raise FileNotFoundError(f"Uma ou mais imagens para '{description}' não foram encontradas.")
         
         h_nativo, w_nativo = template_nativo.shape
         h_hover, w_hover = template_hover.shape
+        h_pequeno, w_pequeno = template_pequeno.shape
+        
         while time.time() - start_time < timeout:
             screenshot = ImageGrab.grab()
             main_image = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
+            
+            # Verifica Nativo
             result_nativo = cv2.matchTemplate(main_image, template_nativo, cv2.TM_CCOEFF_NORMED)
             _, max_val_nativo, _, max_loc_nativo = cv2.minMaxLoc(result_nativo)
             if max_val_nativo >= confidence:
-                self.log(f"   - '{description} (Nativo)' encontrado com {max_val_nativo*100:.2f}% de confiança. Clicando...")
+                self.log(f"   - '{description} (Nativo)' encontrado ({max_val_nativo*100:.2f}%). Clicando...")
                 center_x = max_loc_nativo[0] + w_nativo // 2
                 center_y = max_loc_nativo[1] + h_nativo // 2
                 pydirectinput.moveTo(center_x, center_y, duration=0.25)
                 pydirectinput.click()
                 return True
+            
+            # Verifica Hover
             result_hover = cv2.matchTemplate(main_image, template_hover, cv2.TM_CCOEFF_NORMED)
             _, max_val_hover, _, max_loc_hover = cv2.minMaxLoc(result_hover)
             if max_val_hover >= confidence:
-                self.log(f"   - '{description} (Hover)' encontrado com {max_val_hover*100:.2f}% de confiança. Clicando...")
+                self.log(f"   - '{description} (Hover)' encontrado ({max_val_hover*100:.2f}%). Clicando...")
                 center_x = max_loc_hover[0] + w_hover // 2
                 center_y = max_loc_hover[1] + h_hover // 2
                 pydirectinput.moveTo(center_x, center_y, duration=0.25)
                 pydirectinput.click()
                 return True
+
+            # Verifica Pequeno (NOVO)
+            result_pequeno = cv2.matchTemplate(main_image, template_pequeno, cv2.TM_CCOEFF_NORMED)
+            _, max_val_pequeno, _, max_loc_pequeno = cv2.minMaxLoc(result_pequeno)
+            if max_val_pequeno >= confidence:
+                self.log(f"   - '{description} (Pequeno)' encontrado ({max_val_pequeno*100:.2f}%). Clicando...")
+                center_x = max_loc_pequeno[0] + w_pequeno // 2
+                center_y = max_loc_pequeno[1] + h_pequeno // 2
+                pydirectinput.moveTo(center_x, center_y, duration=0.25)
+                pydirectinput.click()
+                return True
+
             time.sleep(0.5)
-        self.log(f"   - ERRO: Não foi possível encontrar a imagem '{description}' em nenhum dos estados após {timeout} segundos.")
+        
+        self.log(f"   - ERRO: Não foi possível encontrar a imagem '{description}' em nenhuma das 3 variações após {timeout} segundos.")
         return False
     
     def encontrar_e_clicar_imagem(self, image_path, description, timeout=10, confidence=0.8, usar_escala_de_cinza=False):
@@ -344,10 +425,11 @@ class DesktopAutomationApp:
             if not self.encontrar_e_clicar_imagem(self.imagem_botao_pesquisar.get(), "Botão Pesquisar"): return False
             time.sleep(1) 
 
-            # Etapa 4: Clicar no botão de liquidação/crédito
-            if not self.encontrar_e_clicar_duas_imagens(
+            # Etapa 4: Clicar no botão de liquidação/crédito (Agora verifica 3 estados: Nativo, Hover e Pequeno)
+            if not self.encontrar_e_clicar_tres_imagens(
                 self.imagem_botao_liquidacao_nativo.get(), 
                 self.imagem_botao_liquidacao_hover.get(),
+                self.imagem_botao_liquidacao_pequeno.get(),
                 "Crédito Recebido"
             ): return False
             
