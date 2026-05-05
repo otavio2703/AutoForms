@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-MODIFICAÇÕES v3.13:
-1. Adicionado registro de "Sucesso" ou "Erro" em uma nova coluna no Excel.
-2. O Excel processado é salvo como um novo arquivo ao final (ex: arquivo_PROCESSADO.xlsx).
-3. Geração de arquivo .txt contendo apenas os contratos que deram erro.
-"""
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import pandas as pd
@@ -23,8 +16,6 @@ class DesktopAutomationApp:
         self.root.title("Automatizador Desktop v3.13 (Relatórios Excel e TXT)")
         self.root.geometry("700x760")
         pydirectinput.PAUSE = 0.1
-
-        # Variáveis para os caminhos dos arquivos
         self.excel_path = tk.StringVar()
         self.imagem_rotulo_contrato = tk.StringVar()
         self.imagem_botao_pesquisar = tk.StringVar()
@@ -202,18 +193,16 @@ class DesktopAutomationApp:
                 self.log(f"A automação real começará em {i} segundos...")
                 time.sleep(1)
             
-            # Carregar DataFrame e garantir que é uma cópia limpa
             df = pd.read_excel(caminho_excel)
             
-            # Adicionar coluna de Status se não existir
+          
             if 'Status' not in df.columns:
                 df['Status'] = ""
 
-            lista_erros = [] # Lista para guardar os erros para o TXT
+            lista_erros = [] 
             processed_count = 0
             
-            # Filtrar apenas as linhas onde o contrato não é nulo
-            # Importante: iterrows retorna o índice original, o que é bom para atualizar o DF original
+
             indices_validos = df[df[coluna_contrato].notna()].index
 
             for index in indices_validos:
@@ -229,20 +218,17 @@ class DesktopAutomationApp:
                 if contrato_str:
                     self.update_progress_label(f"Processando {processed_count} de {len(indices_validos)}...")
                     
-                    # Tenta processar
                     success = self.processar_contrato(contrato_str)
                     
                     if success:
                         self.log(f"SUCESSO: Contrato {contrato_str} processado.")
-                        df.at[index, 'Status'] = "Luquidado"
+                        df.at[index, 'Status'] = "Liquidado"
                     else:
                         self.log(f"FALHA: Contrato {contrato_str} não processado.\n")
                         df.at[index, 'Status'] = "Erro"
                         lista_erros.append(contrato_str)
             
-            # --- Fim do Loop ou Interrupção ---
             
-            # 1. Salvar Excel atualizado (Gera um novo arquivo para evitar erro de permissão se o original estiver aberto)
             base_name = os.path.splitext(caminho_excel)[0]
             novo_nome_excel = f"{base_name}_PROCESSADO.xlsx"
             
@@ -253,7 +239,6 @@ class DesktopAutomationApp:
             except Exception as e:
                 self.log(f"ERRO CRÍTICO ao salvar Excel: {e}")
 
-            # 2. Gerar TXT de erros
             if lista_erros:
                 try:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -328,7 +313,6 @@ class DesktopAutomationApp:
         self.log(f" - Procurando '{description}' (Nativo, Hover ou Pequeno)...")
         start_time = time.time()
         
-        # Carrega os templates
         template_nativo = cv2.imread(image_path_nativo, cv2.IMREAD_GRAYSCALE)
         template_hover = cv2.imread(image_path_hover, cv2.IMREAD_GRAYSCALE)
         template_pequeno = cv2.imread(image_path_pequeno, cv2.IMREAD_GRAYSCALE)
@@ -344,7 +328,6 @@ class DesktopAutomationApp:
             screenshot = ImageGrab.grab()
             main_image = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
             
-            # Verifica Nativo
             result_nativo = cv2.matchTemplate(main_image, template_nativo, cv2.TM_CCOEFF_NORMED)
             _, max_val_nativo, _, max_loc_nativo = cv2.minMaxLoc(result_nativo)
             if max_val_nativo >= confidence:
@@ -355,7 +338,6 @@ class DesktopAutomationApp:
                 pydirectinput.click()
                 return True
             
-            # Verifica Hover
             result_hover = cv2.matchTemplate(main_image, template_hover, cv2.TM_CCOEFF_NORMED)
             _, max_val_hover, _, max_loc_hover = cv2.minMaxLoc(result_hover)
             if max_val_hover >= confidence:
@@ -366,7 +348,6 @@ class DesktopAutomationApp:
                 pydirectinput.click()
                 return True
 
-            # Verifica Pequeno (NOVO)
             result_pequeno = cv2.matchTemplate(main_image, template_pequeno, cv2.TM_CCOEFF_NORMED)
             _, max_val_pequeno, _, max_loc_pequeno = cv2.minMaxLoc(result_pequeno)
             if max_val_pequeno >= confidence:
@@ -413,19 +394,17 @@ class DesktopAutomationApp:
             offset_x = int(self.offset_x_entry.get())
             offset_y = int(self.offset_y_entry.get())
             
-            # Etapa 1: Encontrar o rótulo e clicar no campo de contrato
             if not self.encontrar_e_clicar_offset(self.imagem_rotulo_contrato.get(), "Rótulo do Campo", offset_x, offset_y): return False
             time.sleep(0.5)
 
-            # Etapa 2: Colar o número do contrato
             self.log(f"   - Colando contrato (Ctrl+V): {numero_contrato}")
             self.paste_text(numero_contrato)
 
-            # Etapa 3: Clicar no botão de pesquisar
             if not self.encontrar_e_clicar_imagem(self.imagem_botao_pesquisar.get(), "Botão Pesquisar"): return False
+            if not self.encontrar_e_clicar_imagem(self.imagem_botao_pesquisar.get(), "Botão Pesquisar (Verificação)"): return False
+            if not self.encontrar_e_clicar_imagem(self.imagem_botao_pesquisar.get(), "Botão Pesquisar (Verificação Duplo)"): return False
             time.sleep(1) 
 
-            # Etapa 4: Clicar no botão de liquidação/crédito (Agora verifica 3 estados: Nativo, Hover e Pequeno)
             if not self.encontrar_e_clicar_tres_imagens(
                 self.imagem_botao_liquidacao_nativo.get(), 
                 self.imagem_botao_liquidacao_hover.get(),
@@ -433,7 +412,6 @@ class DesktopAutomationApp:
                 "Crédito Recebido"
             ): return False
             
-            # Etapa 5: Rolar a tela para baixo
             self.log("   - Rolando a tela para baixo...")
             pydirectinput.press('down')
             pydirectinput.press('down')
@@ -448,20 +426,19 @@ class DesktopAutomationApp:
             pydirectinput.press('down')
             pydirectinput.press('down')
             pydirectinput.press('down')
+            pydirectinput.press('down')
+            pydirectinput.press('down')
 
             time.sleep(0.5)
-
-            # Etapa 6: Clicar no botão final
             if not self.encontrar_e_clicar_imagem(self.imagem_botao_final.get(), "Botão Final"): return False
             
-            # Etapa 7: Confirmar a operação com Enter
             self.log("   - Confirmando a operação (Enter, aguarda 2s, Enter)...")
             pydirectinput.press('enter')
             time.sleep(2)
             pydirectinput.press('enter')
+            pydirectinput.press('enter')
             time.sleep(1)
             
-            # Etapa 8: Limpar o campo para o próximo contrato
             self.log("   - Preparando para o próximo ciclo...")
             if not self.encontrar_e_clicar_offset(self.imagem_rotulo_contrato.get(), "Rótulo do Campo", offset_x, offset_y):
                 self.log("   - ERRO: Não foi possível retornar ao campo de contrato para limpá-lo.")
